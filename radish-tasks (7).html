@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Task Board · Radish World</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --black: #111; --white: #fff; --ink: #1a1a1a;
+  --blue: #1A3FFF; --blue-soft: rgba(26,63,255,0.04);
+  --gray-1: #e8e6e2; --gray-2: #dbd9d5; --gray-3: #c4c2be;
+  --gray-4: #999; --gray-5: #555; --gray-6: #333;
+  --pad: clamp(20px, 5vw, 80px);
+}
+html { font-size: 14px; }
+body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background: var(--white); color: var(--ink); min-height: 100vh; overflow-x: hidden; }
+
+/* ── LOCK SCREEN ── */
+#lock-screen {
+  position: fixed; inset: 0; background: var(--white);
+  z-index: 9999; display: flex; flex-direction: column;
+  transition: opacity 0.4s ease, visibility 0.4s;
+}
+#lock-screen.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+
+.lock-header {
+  width: 100%; padding: 24px var(--pad) 20px;
+  border-bottom: 1px solid var(--black);
+  display: flex; align-items: baseline; justify-content: space-between;
+}
+.lock-wordmark { font-size: 14px; font-weight: 700; color: var(--ink); }
+.lock-header-right { font-size: 10px; font-weight: 300; text-transform: uppercase; letter-spacing: 0.06em; color: var(--gray-4); }
+
+.lock-body {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  padding: 40px var(--pad);
+}
+.lock-inner { width: 100%; max-width: 320px; display: flex; flex-direction: column; gap: 14px; }
+.lock-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink); margin-bottom: 4px; }
+.lock-sub { font-size: 12px; font-weight: 300; color: var(--gray-4); }
+.lock-input {
+  width: 100%; border: none; border-bottom: 1px solid var(--black);
+  background: transparent; color: var(--ink);
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-size: 15px; font-weight: 300; padding: 10px 0; outline: none;
+  border-radius: 0; -webkit-appearance: none;
+  transition: border-color 0.2s;
+}
+.lock-input:focus { border-bottom-color: var(--blue); }
+.lock-btn {
+  background: var(--black); color: var(--white); border: none;
+  padding: 14px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; cursor: pointer; width: 100%;
+  transition: background 0.2s; border-radius: 0;
+}
+.lock-btn:hover { background: var(--gray-5); }
+.lock-error { font-size: 11px; color: #c0392b; opacity: 0; transition: opacity 0.3s; min-height: 16px; }
+.lock-error.visible { opacity: 1; }
+
+/* ── APP ── */
+#app { opacity: 0; transition: opacity 0.4s ease 0.1s; }
+#app.visible { opacity: 1; }
+
+/* ── HEADER ── */
+.header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px var(--pad); border-bottom: 1px solid var(--black);
+  background: var(--white); position: sticky; top: 0; z-index: 20;
+}
+.header-brand { font-size: 14px; font-weight: 700; color: var(--ink); }
+.header-brand span { color: var(--blue); }
+.header-right { display: flex; align-items: center; gap: 20px; }
+.header-date { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--gray-4); }
+.hcount { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--gray-4); }
+.hcount span { color: var(--blue); }
+
+/* ── TABS ── */
+.tabs-row {
+  display: flex; align-items: stretch;
+  border-bottom: 1px solid var(--black);
+  background: var(--white); position: sticky; top: 55px; z-index: 19;
+  overflow-x: auto; scrollbar-width: none;
+}
+.tabs-row::-webkit-scrollbar { display: none; }
+.tab {
+  font-size: 10px; font-weight: 500; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--gray-4);
+  padding: 14px 20px; cursor: pointer;
+  border-right: 1px solid var(--gray-2);
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s; white-space: nowrap; flex-shrink: 0;
+  background: none; user-select: none;
+  display: flex; align-items: center; gap: 7px;
+  margin-bottom: -1px;
+}
+.tab:hover { color: var(--ink); background: var(--blue-soft); }
+.tab.active { color: var(--ink); font-weight: 700; border-bottom-color: var(--blue); background: var(--blue-soft); }
+.tab-count {
+  font-size: 9px; font-weight: 700; background: var(--gray-2); color: var(--gray-5);
+  padding: 1px 6px; border-radius: 10px; min-width: 18px; text-align: center;
+}
+.tab.active .tab-count { background: var(--blue); color: var(--white); }
+.tab[data-tab="today"] { font-weight: 700; color: var(--ink); }
+.tab[data-tab="deb"] { color: var(--blue); }
+.tab[data-tab="deb"].active { border-bottom-color: var(--blue); }
+.tab[data-tab="deb"].active .tab-count { background: var(--blue); }
+.tab[data-tab="waiting"] { color: #a07800; }
+.tab[data-tab="waiting"].active { border-bottom-color: #c89600; background: rgba(200,150,0,0.06); }
+.tab[data-tab="waiting"].active .tab-count { background: #c89600; color: #fff; }
+.tab[data-tab="waiting"] .tab-count { background: #fff3cd; color: #a07800; }
+.tab[data-tab="done"] { color: #1a7a3a; }
+.tab[data-tab="done"].active { border-bottom-color: #1a7a3a; background: rgba(26,122,58,0.05); }
+.tab[data-tab="done"].active .tab-count { background: #1a7a3a; color: #fff; }
+.tab[data-tab="done"] .tab-count { background: #d4edda; color: #1a7a3a; }
+
+/* ── CONTENT ── */
+.content { padding: 0 var(--pad) 80px; }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* ── STATS STRIP ── */
+.stats-strip { display: grid; grid-template-columns: repeat(4,1fr); border-bottom: 1px solid var(--gray-2); }
+.stat-cell { padding: 18px 0; border-right: 1px solid var(--gray-2); }
+.stat-cell:last-child { border-right: none; }
+.stat-cell:not(:first-child) { padding-left: 24px; }
+.stat-label { font-size: 9px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; color: var(--gray-4); margin-bottom: 8px; }
+.stat-val { font-size: 28px; font-weight: 300; color: var(--ink); line-height: 1; letter-spacing: -0.02em; }
+.stat-val.blue { color: var(--blue); }
+
+/* ── ADD BAR ── */
+.add-bar { display: flex; align-items: center; border-bottom: 1px solid var(--black); }
+.add-plus {
+  font-size: 20px; font-weight: 300; color: var(--blue);
+  padding: 16px 16px 16px 0; cursor: pointer; flex-shrink: 0;
+  line-height: 1; user-select: none; transition: transform 0.15s;
+}
+.add-plus:hover { transform: scale(1.2); }
+.add-input {
+  flex: 1; border: none; background: transparent;
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-size: 13px; font-weight: 300; color: var(--ink);
+  padding: 16px 0; outline: none;
+}
+.add-input::placeholder { color: var(--gray-3); }
+.add-selects { display: flex; gap: 6px; align-items: center; padding-left: 12px; flex-shrink: 0; }
+.add-select {
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-size: 9px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.04em; color: var(--gray-5);
+  border: 1px solid var(--gray-2); background: transparent;
+  padding: 5px 8px; cursor: pointer; outline: none;
+  border-radius: 0; -webkit-appearance: none; max-width: 96px;
+}
+.add-select:focus { border-color: var(--blue); }
+.add-btn {
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-size: 9px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--white);
+  background: var(--black); border: none;
+  padding: 7px 14px; cursor: pointer; margin-left: 8px; flex-shrink: 0;
+  transition: background 0.15s;
+}
+.add-btn:hover { background: var(--gray-5); }
+
+/* ── SECTION LABEL ── */
+.section-label {
+  font-size: 9px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--gray-4);
+  padding: 14px 0 8px; border-bottom: 1px solid var(--gray-2);
+  display: flex; align-items: center; justify-content: space-between;
+  cursor: pointer; user-select: none;
+}
+.sl-right { display: flex; align-items: center; gap: 10px; }
+.sl-toggle { color: var(--gray-3); font-size: 10px; transition: transform 0.2s; }
+.section-label.collapsed .sl-toggle { transform: rotate(-90deg); }
+.task-list.collapsed-list { display: none; }
+
+/* ── PINNED / MAIN badge ── */
+.pinned-badge {
+  font-size: 8px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--gray-5);
+  background: var(--gray-1); padding: 1px 6px;
+}
+
+/* ── QUICK TASKS header accent ── */
+.section-label.quick-label { color: var(--blue); border-bottom-color: var(--blue); }
+.section-label.quick-label .sl-toggle { color: var(--blue); opacity: 0.5; }
+
+/* ── TASK ROW ── */
+.task-list { margin-bottom: 0; }
+.task-row {
+  display: flex; align-items: flex-start;
+  border-bottom: 1px solid var(--gray-2);
+  padding: 13px 0; transition: background 0.12s; position: relative;
+}
+.task-row:hover { background: var(--blue-soft); }
+.task-row.done { opacity: 0.4; }
+.task-row.done .task-title { text-decoration: line-through; color: var(--gray-4); }
+.task-row.is-pinned { background: rgba(0,0,0,0.01); }
+
+/* Checkbox */
+.task-check {
+  width: 14px; height: 14px; border: 1px solid var(--gray-3);
+  flex-shrink: 0; cursor: pointer; margin-top: 2px; margin-right: 14px;
+  display: flex; align-items: center; justify-content: center; transition: all 0.15s;
+}
+.task-check:hover { border-color: var(--blue); }
+.task-row.done .task-check { background: var(--ink); border-color: var(--ink); }
+.task-check-tick {
+  width: 6px; height: 4px;
+  border-left: 1.5px solid var(--white); border-bottom: 1.5px solid var(--white);
+  transform: rotate(-45deg) translateY(-1px); display: none;
+}
+.task-row.done .task-check-tick { display: block; }
+
+/* Body */
+.task-body { flex: 1; min-width: 0; }
+.task-title { font-size: 13px; font-weight: 400; color: var(--ink); line-height: 1.5; margin-bottom: 5px; outline: none; }
+.task-title:focus { border-bottom: 1px solid var(--gray-2); }
+.task-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.task-cat { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--blue); opacity: 0.65; }
+.task-priority { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; padding: 2px 5px; border: 1px solid; flex-shrink: 0; }
+.pri-high { color: var(--blue); border-color: var(--blue); }
+.pri-med { color: var(--gray-5); border-color: var(--gray-3); }
+.pri-low { color: var(--gray-3); border-color: var(--gray-2); }
+.task-assignee { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; padding: 2px 5px; flex-shrink: 0; }
+.asgn-david { background: var(--ink); color: var(--white); }
+.asgn-deb { background: var(--blue); color: var(--white); }
+.asgn-both { background: var(--gray-2); color: var(--gray-6); }
+.task-note { font-size: 11px; color: var(--gray-4); font-weight: 300; margin-top: 5px; line-height: 1.5; }
+.task-link { font-size: 11px; color: var(--blue); font-weight: 400; margin-top: 4px; text-decoration: none; border-bottom: 1px solid rgba(26,63,255,0.3); display: inline-block; line-height: 1.4; }
+.task-link:hover { border-bottom-color: var(--blue); }
+.task-note-wrap { display: none; margin-top: 8px; }
+.task-note-wrap.open { display: block; }
+.task-note-input {
+  width: 100%; border: none; border-bottom: 1px solid var(--gray-2);
+  background: transparent; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-size: 12px; font-weight: 300; color: var(--ink);
+  padding: 6px 0; outline: none; resize: none;
+}
+.task-note-input::placeholder { color: var(--gray-3); }
+
+/* Actions */
+.task-actions {
+  display: flex; align-items: center; gap: 10px;
+  margin-left: 14px; flex-shrink: 0;
+  opacity: 0; transition: opacity 0.15s;
+}
+.task-row:hover .task-actions { opacity: 1; }
+.task-del { font-size: 12px; color: var(--gray-3); cursor: pointer; transition: color 0.15s; padding: 2px; }
+.task-del:hover { color: #c0392b; }
+.task-row-del {
+  font-size: 10px; color: var(--gray-3); cursor: pointer;
+  transition: color 0.15s; line-height: 1; user-select: none;
+}
+.task-row-del:hover { color: #c0392b; }
+.task-note-btn { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--gray-3); cursor: pointer; transition: color 0.15s; }
+.task-note-btn:hover { color: var(--blue); }
+.task-move { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--gray-3); cursor: pointer; transition: color 0.15s; white-space: nowrap; }
+.task-move:hover { color: var(--ink); }
+.task-pin-btn { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--gray-3); cursor: pointer; transition: color 0.15s; }
+.task-pin-btn:hover { color: var(--ink); }
+
+/* ── DEB'S NOTES TAB ── */
+.deb-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border-top: 1px solid var(--black); }
+@media (max-width: 800px) { .deb-layout { grid-template-columns: 1fr; } }
+
+.deb-col { padding: 0; }
+.deb-col:first-child { border-right: 1px solid var(--black); padding-right: 32px; }
+.deb-col:last-child { padding-left: 32px; }
+@media (max-width: 800px) { .deb-col:first-child { border-right: none; padding-right: 0; border-bottom: 1px solid var(--black); padding-bottom: 32px; margin-bottom: 32px; } .deb-col:last-child { padding-left: 0; } }
+
+.deb-col-label {
+  font-size: 9px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--blue);
+  padding: 18px 0 12px; border-bottom: 1px solid var(--gray-2);
+  margin-bottom: 0;
+}
+
+/* Notes scratchpad */
+.deb-notes-area {
+  width: 100%; min-height: 220px;
+  border: none; border-bottom: 1px solid var(--gray-2);
+  background: transparent; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-size: 13px; font-weight: 300; color: var(--ink);
+  padding: 16px 0; outline: none; resize: none; line-height: 1.7;
+  display: block;
+}
+.deb-notes-area::placeholder { color: var(--gray-3); }
+.deb-save-note-btn {
+  font-size: 9px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--white);
+  background: var(--black); border: none;
+  padding: 8px 16px; cursor: pointer; margin-top: 12px;
+  transition: background 0.15s;
+}
+.deb-save-note-btn:hover { background: var(--gray-5); }
+.deb-saved-notes { margin-top: 20px; }
+.deb-saved-note {
+  border-bottom: 1px solid var(--gray-2); padding: 12px 0;
+  font-size: 12px; font-weight: 300; color: var(--ink);
+  line-height: 1.7; white-space: pre-wrap; position: relative;
+}
+.deb-note-del {
+  position: absolute; top: 12px; right: 0;
+  font-size: 11px; color: var(--gray-3); cursor: pointer;
+  opacity: 0; transition: opacity 0.15s, color 0.15s;
+}
+.deb-saved-note:hover .deb-note-del { opacity: 1; }
+.deb-note-del:hover { color: #c0392b; }
+.deb-note-meta { font-size: 9px; color: var(--gray-4); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+
+/* Deb task input */
+.deb-task-input-row { display: flex; align-items: center; border-bottom: 1px solid var(--black); }
+.deb-task-input {
+  flex: 1; border: none; background: transparent;
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-size: 13px; font-weight: 300; color: var(--ink);
+  padding: 16px 0; outline: none;
+}
+.deb-task-input::placeholder { color: var(--gray-3); }
+
+/* Priority buttons - send task to a timeline bucket */
+.deb-send-btns {
+  display: flex; gap: 0; margin-top: 0;
+  border-bottom: 1px solid var(--gray-2);
+}
+.deb-send-btn {
+  flex: 1; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-size: 9px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; border: none;
+  padding: 10px 8px; cursor: pointer;
+  border-right: 1px solid var(--gray-2);
+  transition: background 0.15s, color 0.15s;
+  background: var(--white); color: var(--gray-5);
+}
+.deb-send-btn:last-child { border-right: none; }
+.deb-send-btn:hover { background: var(--blue); color: var(--white); }
+.deb-send-btn.today-btn:hover { background: var(--black); color: var(--white); }
+
+/* Deb task list */
+.deb-task-list { margin-top: 0; }
+.deb-empty { padding: 32px 0; text-align: center; color: var(--gray-3); font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; }
+
+/* ── PRIORITY PICKER (hover) ── */
+.pri-picker {
+  position: relative; display: inline-flex; align-items: center; flex-shrink: 0;
+}
+/* invisible bridge so cursor doesn't leave the hover zone */
+.pri-picker::after {
+  content: ''; position: absolute; top: 100%; left: 0;
+  width: 100%; height: 10px;
+}
+.pri-picker-dropdown {
+  display: none; position: absolute; top: calc(100% + 10px); left: 0;
+  background: var(--white); border: 1px solid var(--black);
+  z-index: 200; min-width: 90px; flex-direction: column;
+  box-shadow: 2px 4px 16px rgba(0,0,0,0.10);
+}
+.pri-picker:hover .pri-picker-dropdown { display: flex; }
+.pri-option {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; padding: 10px 14px; cursor: pointer;
+  white-space: nowrap; transition: background 0.1s;
+}
+.pri-option:hover { background: var(--gray-1); }
+.pri-option.opt-high { color: var(--blue); }
+.pri-option.opt-med  { color: var(--gray-5); }
+.pri-option.opt-low  { color: var(--gray-3); }
+/* also size up the badge itself */
+.task-priority { font-size: 9px !important; padding: 3px 7px !important; cursor: default; }
+
+/* ── EMPTY ── */
+.empty-state { padding: 40px 0; text-align: center; color: var(--gray-3); font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; }
+
+/* ── MOBILE ── */
+@media (max-width: 600px) {
+  .add-selects { display: none; }
+  .stats-strip { grid-template-columns: repeat(2,1fr); }
+  .stat-cell:nth-child(2) { border-right: none; }
+  .header-date { display: none; }
+}
+</style>
+</head>
+<body>
+
+<!-- LOCK SCREEN -->
+<div id="lock-screen">
+  <div class="lock-header">
+    <div class="lock-wordmark">RADISH WORLD</div>
+    <div class="lock-header-right">Internal · Task Board</div>
+  </div>
+  <div class="lock-body">
+    <div class="lock-inner">
+      <div class="lock-title">Access Required</div>
+      <div class="lock-sub">Enter your password to continue.</div>
+      <input class="lock-input" id="lock-pw" type="password" placeholder="Password"
+        onkeydown="if(event.key==='Enter') tryUnlock()">
+      <button class="lock-btn" onclick="tryUnlock()">Enter</button>
+      <div class="lock-error" id="lock-error">Incorrect password.</div>
+    </div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <header class="header">
+    <div class="header-brand">RADISH<span> ·</span> TASKS</div>
+    <div class="header-right">
+      <div class="header-date" id="hdate"></div>
+      <div class="hcount">Open <span id="cnt-open">0</span></div>
+      <div class="hcount">Done <span id="cnt-done">0</span></div>
+    </div>
+  </header>
+
+  <nav class="tabs-row">
+    <div class="tab active" data-tab="today">Today <span class="tab-count" id="tc-today">0</span></div>
+    <div class="tab" data-tab="week">This Week <span class="tab-count" id="tc-week">0</span></div>
+    <div class="tab" data-tab="next">Next Up <span class="tab-count" id="tc-next">0</span></div>
+    <div class="tab" data-tab="backlog">Backlog <span class="tab-count" id="tc-backlog">0</span></div>
+    <div class="tab" data-tab="waiting">Waiting <span class="tab-count" id="tc-waiting">0</span></div>
+    <div class="tab" data-tab="personal">Personal <span class="tab-count" id="tc-personal">0</span></div>
+    <div class="tab" data-tab="deb">Deb's Notes <span class="tab-count" id="tc-deb">0</span></div>
+    <div class="tab" data-tab="done">Done <span class="tab-count" id="tc-done-tab">0</span></div>
+  </nav>
+
+  <main class="content">
+
+    <!-- TODAY -->
+    <div class="tab-panel active" id="panel-today">
+      <div class="stats-strip">
+        <div class="stat-cell"><div class="stat-label">Total Open</div><div class="stat-val blue" id="s-open">0</div></div>
+        <div class="stat-cell"><div class="stat-label">Today</div><div class="stat-val" id="s-today">0</div></div>
+        <div class="stat-cell"><div class="stat-label">High Priority</div><div class="stat-val" id="s-high">0</div></div>
+        <div class="stat-cell"><div class="stat-label">Deb</div><div class="stat-val" id="s-deb">0</div></div>
+      </div>
+
+      <!-- QUICK TASKS - top, front and center -->
+      <div class="section-label quick-label" id="quick-label">
+        Quick Tasks
+        <div class="sl-right">
+          <span class="sl-toggle">▾</span>
+        </div>
+      </div>
+      <div class="add-bar" id="quick-add-bar">
+        <div class="add-plus" onclick="document.getElementById('add-quick').focus()">+</div>
+        <input class="add-input" id="add-quick" placeholder="Quick task - enter to add..." onkeydown="handleAddKey(event,'today',false)">
+        <div class="add-selects">
+          <select class="add-select" id="cat-quick">
+            <option value="personal" selected>Personal</option><option value="internal">Internal</option>
+            <option value="portals">Portals</option><option value="creative">Creative</option>
+            <option value="seo">SEO</option><option value="production">Production</option>
+          </select>
+          <select class="add-select" id="pri-quick"><option value="high">High</option><option value="med" selected>Med</option><option value="low">Low</option></select>
+          <select class="add-select" id="asgn-quick"><option value="david" selected>David</option><option value="deb">Deb</option><option value="both">Both</option></select>
+          <button class="add-btn" onclick="addQuickTask()">Add</button>
+        </div>
+      </div>
+      <div class="task-list" id="quick-list"></div>
+
+      <!-- MAIN TASKS - pinned, stay until checked -->
+      <div class="section-label" id="main-label" style="margin-top:16px;">
+        Main Tasks
+        <div class="sl-right">
+          <span style="font-size:9px;color:var(--gray-4);font-weight:400;text-transform:none;letter-spacing:0">Stays until checked off</span>
+          <span class="sl-toggle">▾</span>
+        </div>
+      </div>
+      <div class="add-bar" id="main-add-bar">
+        <div class="add-plus" onclick="document.getElementById('add-main').focus()">+</div>
+        <input class="add-input" id="add-main" placeholder="Add a main task..." onkeydown="handleAddKey(event,'today',true)">
+        <div class="add-selects">
+          <select class="add-select" id="cat-main">
+            <option value="internal" selected>Internal</option><option value="portals">Portals</option>
+            <option value="creative">Creative</option><option value="seo">SEO</option>
+            <option value="production">Production</option><option value="personal">Personal</option>
+          </select>
+          <select class="add-select" id="pri-main"><option value="high">High</option><option value="med" selected>Med</option><option value="low">Low</option></select>
+          <select class="add-select" id="asgn-main"><option value="david" selected>David</option><option value="deb">Deb</option><option value="both">Both</option></select>
+          <button class="add-btn" onclick="addMainTask()">Add</button>
+        </div>
+      </div>
+      <div class="task-list" id="main-list"></div>
+    </div>
+
+    <!-- THIS WEEK -->
+    <div class="tab-panel" id="panel-week">
+      <div class="add-bar">
+        <div class="add-plus" onclick="focusAdd('week')">+</div>
+        <input class="add-input" id="add-week" placeholder="Add a task for this week..." onkeydown="handleAddKey(event,'week',false)">
+        <div class="add-selects">
+          <select class="add-select" id="cat-week"><option value="internal" selected>Internal</option><option value="portals">Portals</option><option value="creative">Creative</option><option value="seo">SEO</option><option value="production">Production</option><option value="personal">Personal</option></select>
+          <select class="add-select" id="pri-week"><option value="high">High</option><option value="med" selected>Med</option><option value="low">Low</option></select>
+          <select class="add-select" id="asgn-week"><option value="david" selected>David</option><option value="deb">Deb</option><option value="both">Both</option></select>
+          <button class="add-btn" onclick="addTask('week')">Add</button>
+        </div>
+      </div>
+      <div class="section-label" id="week-list-label">This Week <span class="sl-toggle">▾</span></div>
+      <div class="task-list" id="week-list"></div>
+    </div>
+
+    <!-- NEXT UP -->
+    <div class="tab-panel" id="panel-next">
+      <div class="add-bar">
+        <div class="add-plus" onclick="focusAdd('next')">+</div>
+        <input class="add-input" id="add-next" placeholder="Add to next up..." onkeydown="handleAddKey(event,'next',false)">
+        <div class="add-selects">
+          <select class="add-select" id="cat-next"><option value="internal" selected>Internal</option><option value="portals">Portals</option><option value="creative">Creative</option><option value="seo">SEO</option><option value="production">Production</option><option value="personal">Personal</option></select>
+          <select class="add-select" id="pri-next"><option value="high">High</option><option value="med" selected>Med</option><option value="low">Low</option></select>
+          <select class="add-select" id="asgn-next"><option value="david" selected>David</option><option value="deb">Deb</option><option value="both">Both</option></select>
+          <button class="add-btn" onclick="addTask('next')">Add</button>
+        </div>
+      </div>
+      <div class="section-label" id="next-list-label">Next Up <span class="sl-toggle">▾</span></div>
+      <div class="task-list" id="next-list"></div>
+    </div>
+
+    <!-- BACKLOG -->
+    <div class="tab-panel" id="panel-backlog">
+      <div class="add-bar">
+        <div class="add-plus" onclick="focusAdd('backlog')">+</div>
+        <input class="add-input" id="add-backlog" placeholder="Add to backlog..." onkeydown="handleAddKey(event,'backlog',false)">
+        <div class="add-selects">
+          <select class="add-select" id="cat-backlog"><option value="internal" selected>Internal</option><option value="portals">Portals</option><option value="creative">Creative</option><option value="seo">SEO</option><option value="production">Production</option><option value="personal">Personal</option></select>
+          <select class="add-select" id="pri-backlog"><option value="high">High</option><option value="med" selected>Med</option><option value="low">Low</option></select>
+          <select class="add-select" id="asgn-backlog"><option value="david" selected>David</option><option value="deb">Deb</option><option value="both">Both</option></select>
+          <button class="add-btn" onclick="addTask('backlog')">Add</button>
+        </div>
+      </div>
+      <div class="section-label" id="backlog-list-label">Backlog <span class="sl-toggle">▾</span></div>
+      <div class="task-list" id="backlog-list"></div>
+    </div>
+
+    <!-- WAITING -->
+    <div class="tab-panel" id="panel-waiting">
+      <div class="add-bar">
+        <div class="add-plus" onclick="focusAdd('waiting')">+</div>
+        <input class="add-input" id="add-waiting" placeholder="Add something you're waiting on..." onkeydown="handleAddKey(event,'waiting',false)">
+        <div class="add-selects">
+          <select class="add-select" id="cat-waiting"><option value="internal" selected>Internal</option><option value="portals">Portals</option><option value="creative">Creative</option><option value="seo">SEO</option><option value="production">Production</option><option value="personal">Personal</option></select>
+          <select class="add-select" id="pri-waiting"><option value="high">High</option><option value="med" selected>Med</option><option value="low">Low</option></select>
+          <select class="add-select" id="asgn-waiting"><option value="david" selected>David</option><option value="deb">Deb</option><option value="both">Both</option></select>
+          <button class="add-btn" onclick="addTask('waiting')">Add</button>
+        </div>
+      </div>
+      <div class="section-label" id="waiting-list-label">Waiting on Response <span class="sl-toggle">▾</span></div>
+      <div class="task-list" id="waiting-list"></div>
+    </div>
+
+    <!-- PERSONAL -->
+    <div class="tab-panel" id="panel-personal">
+      <div class="add-bar">
+        <div class="add-plus" onclick="focusAdd('personal-tab')">+</div>
+        <input class="add-input" id="add-personal-tab" placeholder="Add a personal task..." onkeydown="handleAddKey(event,'personal-tab',false)">
+        <div class="add-selects">
+          <select class="add-select" id="pri-personal-tab"><option value="high">High</option><option value="med">Med</option><option value="low" selected>Low</option></select>
+          <button class="add-btn" onclick="addPersonalTask()">Add</button>
+        </div>
+      </div>
+      <div class="section-label" id="personal-list-label">Personal <span class="sl-toggle">▾</span></div>
+      <div class="task-list" id="personal-list"></div>
+    </div>
+
+    <!-- DEB'S NOTES -->
+    <div class="tab-panel" id="panel-deb">
+      <div class="deb-layout">
+
+        <!-- LEFT: Notes scratchpad -->
+        <div class="deb-col">
+          <div class="deb-col-label">Notes from Deb</div>
+          <textarea class="deb-notes-area" id="deb-note-input" placeholder="Jot down what Deb said - draft email, idea, request, anything...&#10;&#10;Hit Save to log it."></textarea>
+          <button class="deb-save-note-btn" onclick="saveDebNote()">Save Note</button>
+          <div class="deb-saved-notes" id="deb-saved-notes"></div>
+        </div>
+
+        <!-- RIGHT: Tasks from Deb -->
+        <div class="deb-col">
+          <div class="deb-col-label">Tasks from Deb</div>
+          <div class="deb-task-input-row" style="display:flex;align-items:center;border-bottom:1px solid var(--black);">
+            <input class="deb-task-input" id="deb-task-input" placeholder="Type a task Deb needs done..." style="flex:1;border:none;background:transparent;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:13px;font-weight:300;color:var(--ink);padding:16px 0;outline:none;">
+            <select class="add-select" id="deb-task-pri" style="flex-shrink:0;margin-left:10px;">
+              <option value="high">High</option>
+              <option value="med" selected>Med</option>
+              <option value="low">Low</option>
+            </select>
+            <button class="add-btn" onclick="stageDebTask()" style="margin-left:8px;flex-shrink:0;">Add</button>
+          </div>
+          <div class="deb-task-list" id="deb-task-list"></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- DONE -->
+    <div class="tab-panel" id="panel-done">
+      <div class="section-label" id="done-list-label">Completed <span class="sl-toggle">▾</span></div>
+      <div class="task-list" id="done-list"></div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+// ── PASSWORD ──
+const PASSWORD = 'skarp';
+function tryUnlock() {
+  const val = document.getElementById('lock-pw').value;
+  const err = document.getElementById('lock-error');
+  if (val === PASSWORD) {
+    document.getElementById('lock-screen').classList.add('hidden');
+    document.getElementById('app').classList.add('visible');
+    err.classList.remove('visible');
+  } else {
+    err.classList.add('visible');
+    document.getElementById('lock-pw').value = '';
+    document.getElementById('lock-pw').focus();
+  }
+}
+document.getElementById('lock-pw').focus();
+
+// ── DATA ──
+const STORAGE_KEY = 'radish-tasks-v5';
+const DEB_NOTES_KEY = 'radish-deb-notes-v1';
+const TIMELINES = ['today','week','next','backlog','waiting','personal'];
+const CAT_LABELS = { internal:'Internal', portals:'Portals', creative:'Creative', seo:'SEO & Brand', production:'Production', personal:'Personal' };
+const MOVE_OPTS = {
+  today:   [{tl:'week',l:'→ Week'},{tl:'next',l:'→ Next'},{tl:'backlog',l:'→ Backlog'},{tl:'waiting',l:'→ Waiting'}],
+  week:    [{tl:'today',l:'→ Today'},{tl:'next',l:'→ Next'},{tl:'backlog',l:'→ Backlog'},{tl:'waiting',l:'→ Waiting'}],
+  next:    [{tl:'today',l:'→ Today'},{tl:'week',l:'→ Week'},{tl:'backlog',l:'→ Backlog'},{tl:'waiting',l:'→ Waiting'}],
+  backlog: [{tl:'today',l:'→ Today'},{tl:'week',l:'→ Week'},{tl:'next',l:'→ Next'},{tl:'waiting',l:'→ Waiting'}],
+  waiting: [{tl:'today',l:'→ Today'},{tl:'week',l:'→ Week'},{tl:'next',l:'→ Next'},{tl:'backlog',l:'→ Backlog'}],
+};
+
+const DEFAULT_TASKS = [
+  { id:uid(), title:"Send Deb - Jaz's website link", timeline:'today', pinned:false, cat:'internal', priority:'high', assignee:'david', done:false, note:'', created:Date.now() },
+  { id:uid(), title:"Canva $ - pricing / billing", timeline:'today', pinned:false, cat:'personal', priority:'med', assignee:'david', done:false, note:'', link:'https://chatgpt.com/c/69c3167b-4cc0-8333-a166-3e1896b26794', created:Date.now() },
+  { id:uid(), title:"Creative DB - replace arrow with hover on number clicker", timeline:'week', pinned:false, cat:'creative', priority:'med', assignee:'david', done:false, note:'Hover feature instead of click arrow for rating UX', created:Date.now() },
+  { id:uid(), title:"Extract Lemme × Radish Canva deck as reusable template", timeline:'week', pinned:false, cat:'production', priority:'med', assignee:'both', done:false, note:'Same formats - Claude adapts copy/assets per job', created:Date.now() },
+  { id:uid(), title:"Organize Claude sidebar chats by project type", timeline:'next', pinned:false, cat:'internal', priority:'med', assignee:'david', done:false, note:'Group by project/client in the actual Claude sidebar', created:Date.now() },
+  { id:uid(), title:"Build SEO strategy - populate Radish, David, Deb name signals", timeline:'next', pinned:false, cat:'seo', priority:'med', assignee:'david', done:false, note:'Teach Claude SEO thinking; name associations across portals and content', created:Date.now() },
+  { id:uid(), title:"Break main investor portal from Deb's into separate pages", timeline:'backlog', pinned:false, cat:'portals', priority:'low', assignee:'david', done:false, note:'Currently too much space - split into per-project branches', created:Date.now() },
+  // ── WAITING ──
+  { id:uid(), title:"Form D - double check", timeline:'waiting', pinned:false, cat:'internal', priority:'med', assignee:'david', done:false, note:'', link:'https://chatgpt.com/c/69c3167b-4cc0-8333-a166-3e1896b26794', created:Date.now() },
+  { id:uid(), title:"NH & by-state filing - Form D", timeline:'waiting', pinned:false, cat:'internal', priority:'med', assignee:'david', done:false, note:'', created:Date.now() },
+  // ── MAIN (today pinned) ──
+  { id:uid(), title:"100K–250K more", timeline:'today', pinned:true, cat:'internal', priority:'high', assignee:'david', done:false, note:'', created:Date.now() },
+  // ── BACKLOG ──
+  { id:uid(), title:"#3 - 30 reach outs (in time…)", timeline:'backlog', pinned:false, cat:'internal', priority:'low', assignee:'david', done:false, note:'', created:Date.now() },
+  { id:uid(), title:"Margaret Zhang's friend - TIFF", timeline:'backlog', pinned:false, cat:'internal', priority:'low', assignee:'david', done:false, note:'', created:Date.now() },
+  { id:uid(), title:"Bible + GPT", timeline:'backlog', pinned:false, cat:'internal', priority:'low', assignee:'david', done:false, note:'', created:Date.now() },
+  { id:uid(), title:"Hollow", timeline:'backlog', pinned:false, cat:'internal', priority:'low', assignee:'david', done:false, note:'', created:Date.now() },
+  // ── PERSONAL ──
+  { id:uid(), title:"Dad - checklist", timeline:'personal', pinned:false, cat:'personal', priority:'high', assignee:'david', done:false, note:'Pills · Exercise · Mind games · Diet', created:Date.now() },
+  { id:uid(), title:"Canva - GPT", timeline:'personal', pinned:false, cat:'personal', priority:'low', assignee:'david', done:false, note:'', link:'https://chatgpt.com/c/69c3167b-4cc0-8333-a166-3e1896b26794', created:Date.now() },
+  { id:uid(), title:"Nano banana", timeline:'personal', pinned:false, cat:'personal', priority:'low', assignee:'david', done:false, note:'', created:Date.now() },
+  { id:uid(), title:"17 Hats email", timeline:'personal', pinned:false, cat:'personal', priority:'low', assignee:'david', done:false, note:'', created:Date.now() },
+  { id:uid(), title:"TLDR doc", timeline:'personal', pinned:false, cat:'personal', priority:'low', assignee:'david', done:false, note:'', created:Date.now() },
+  { id:uid(), title:"Jaz budget excels (2)", timeline:'personal', pinned:false, cat:'personal', priority:'low', assignee:'david', done:false, note:'', created:Date.now() },
+  { id:uid(), title:"Budget TikTok", timeline:'personal', pinned:false, cat:'personal', priority:'low', assignee:'david', done:false, note:'', created:Date.now() },
+  { id:uid(), title:"$20K personal + $2.5K rent", timeline:'personal', pinned:false, cat:'personal', priority:'med', assignee:'david', done:false, note:'', created:Date.now() },
+];
+
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+function loadTasks(){ try{ const r=localStorage.getItem(STORAGE_KEY); if(r) return JSON.parse(r); }catch(e){} return DEFAULT_TASKS; }
+function saveTasks(){ localStorage.setItem(STORAGE_KEY,JSON.stringify(tasks)); }
+function loadDebNotes(){ try{ const r=localStorage.getItem(DEB_NOTES_KEY); if(r) return JSON.parse(r); }catch(e){} return []; }
+function saveDebNotes(){ localStorage.setItem(DEB_NOTES_KEY,JSON.stringify(debNotes)); }
+
+let tasks = loadTasks();
+let debNotes = loadDebNotes();
+
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function priClass(p){ return({high:'pri-high',med:'pri-med',low:'pri-low'})[p]||'pri-med'; }
+function priLabel(p){ return({high:'High',med:'Med',low:'Low'})[p]||'Med'; }
+function asgnClass(a){ return({david:'asgn-david',deb:'asgn-deb',both:'asgn-both'})[a]||'asgn-david'; }
+function asgnLabel(a){ return({david:'David',deb:'Deb',both:'Both'})[a]||'David'; }
+
+function buildRow(task, showMove=true) {
+  const div = document.createElement('div');
+  div.className = 'task-row'+(task.done?' done':'')+(task.pinned?' is-pinned':'');
+  div.dataset.id = task.id;
+  const moves = (showMove && !task.done) ? (MOVE_OPTS[task.timeline]||[])
+    .map(m=>`<span class="task-move" onclick="moveTask('${task.id}','${m.tl}')">${m.l}</span>`).join('') : '';
+  const pinBtn = (!task.done && task.timeline==='today')
+    ? `<span class="task-pin-btn" onclick="togglePin('${task.id}')">${task.pinned?'↓ Main':'Main'}</span>` : 
+    (!task.done ? `<span class="task-pin-btn" onclick="makeMain('${task.id}')">Main</span>` : '');
+  div.innerHTML = `
+    <div style="display:flex;flex-direction:column;align-items:center;gap:6px;flex-shrink:0;margin-right:14px;">
+      <div class="task-check" onclick="toggleDone('${task.id}')"><div class="task-check-tick"></div></div>
+      <span class="task-row-del" onclick="deleteTask('${task.id}')">✕</span>
+    </div>
+    <div class="task-body">
+      <div class="task-title" contenteditable="true" spellcheck="false"
+        onblur="updateTitle('${task.id}',this)"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}"
+      >${esc(task.title)}</div>
+      <div class="task-meta">
+        <span class="task-cat">${CAT_LABELS[task.cat]||task.cat}</span>
+        <span class="pri-picker">
+          <span class="task-priority ${priClass(task.priority)}">${priLabel(task.priority)}</span>
+          <span class="pri-picker-dropdown">
+            <span class="pri-option opt-high" onclick="setPriority('${task.id}','high')">High</span>
+            <span class="pri-option opt-med"  onclick="setPriority('${task.id}','med')">Med</span>
+            <span class="pri-option opt-low"  onclick="setPriority('${task.id}','low')">Low</span>
+          </span>
+        </span>
+        <span class="task-assignee ${asgnClass(task.assignee)}">${asgnLabel(task.assignee)}</span>
+        <span class="task-note-btn" onclick="toggleNote('${task.id}')">+ Note</span>
+      </div>
+      ${task.note?`<div class="task-note">${esc(task.note)}</div>`:''}
+      ${task.link?`<a class="task-link" href="${esc(task.link)}" target="_blank">${esc(task.link)}</a>`:''}
+      <div class="task-note-wrap" id="nwrap-${task.id}">
+        <textarea class="task-note-input" rows="2" placeholder="Add a note..." onblur="updateNote('${task.id}',this)">${esc(task.note)}</textarea>
+      </div>
+    </div>
+    <div class="task-actions">
+      ${pinBtn}
+      ${pinBtn && moves ? '<span style="color:var(--gray-2);font-size:10px;">|</span>' : ''}
+      ${moves}
+      <span class="task-note-btn" style="display:none"></span>
+    </div>`;
+  return div;
+}
+
+// ── RENDER ──
+function renderAll() {
+  ['quick-list','main-list','week-list','next-list','backlog-list','waiting-list','personal-list','done-list','deb-task-list']
+    .forEach(id=>{ const el=document.getElementById(id); if(el) el.innerHTML=''; });
+
+  // Today: quick (not pinned) and main (pinned)
+  const todayOpen = tasks.filter(t=>!t.done && t.timeline==='today');
+  renderList('quick-list', todayOpen.filter(t=>!t.pinned));
+  renderList('main-list',  todayOpen.filter(t=>t.pinned));
+
+  // Other timelines
+  ['week','next','backlog','waiting','personal'].forEach(tl=>
+    renderList(`${tl}-list`, tasks.filter(t=>!t.done && t.timeline===tl))
+  );
+
+  // Done
+  renderList('done-list', tasks.filter(t=>t.done));
+
+  // Deb tasks
+  renderDebTasks();
+  renderDebNotes();
+  updateCounts();
+}
+
+function renderList(listId, items) {
+  const el=document.getElementById(listId); if(!el) return;
+  if(!items.length){ el.innerHTML='<div class="empty-state">Nothing here</div>'; return; }
+  const priOrder = {high:0, med:1, low:2};
+  const sorted = [...items].sort((a,b) => (priOrder[a.priority]??1) - (priOrder[b.priority]??1));
+  sorted.forEach(t=>el.appendChild(buildRow(t)));
+}
+
+function renderDebTasks() {
+  const el=document.getElementById('deb-task-list'); if(!el) return;
+  const debTasks = tasks.filter(t=>t.fromDeb && !t.debSent && !t.done);
+  if(!debTasks.length){ el.innerHTML='<div class="deb-empty">No staged tasks - add one above</div>'; return; }
+  el.innerHTML='';
+  debTasks.forEach(t=>{
+    const div=document.createElement('div');
+    div.style.cssText='border-bottom:1px solid var(--gray-2);padding:12px 0;';
+    div.innerHTML=`
+      <div style="display:flex;align-items:flex-start;gap:10px;">
+        <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;padding:3px 6px;border:1px solid;flex-shrink:0;margin-top:1px;" class="task-priority ${priClass(t.priority)}">${priLabel(t.priority)}</span>
+        <span style="flex:1;font-size:13px;font-weight:400;color:var(--ink);line-height:1.5;">${esc(t.title)}</span>
+        <span onclick="deleteTask('${t.id}')" style="font-size:11px;color:var(--gray-3);cursor:pointer;flex-shrink:0;padding:2px;" onmouseover="this.style.color='#c0392b'" onmouseout="this.style.color='var(--gray-3)'">✕</span>
+      </div>
+      <div style="display:flex;gap:0;margin-top:8px;">
+        <button onclick="sendDebTask('${t.id}','today')" style="flex:1;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;border:none;border-right:1px solid var(--gray-2);padding:8px 4px;cursor:pointer;background:var(--white);color:var(--gray-5);" onmouseover="this.style.background='var(--black)';this.style.color='#fff'" onmouseout="this.style.background='var(--white)';this.style.color='var(--gray-5)'">→ Today</button>
+        <button onclick="sendDebTask('${t.id}','week')" style="flex:1;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;border:none;border-right:1px solid var(--gray-2);padding:8px 4px;cursor:pointer;background:var(--white);color:var(--gray-5);" onmouseover="this.style.background='var(--blue)';this.style.color='#fff'" onmouseout="this.style.background='var(--white)';this.style.color='var(--gray-5)'">→ Week</button>
+        <button onclick="sendDebTask('${t.id}','next')" style="flex:1;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;border:none;border-right:1px solid var(--gray-2);padding:8px 4px;cursor:pointer;background:var(--white);color:var(--gray-5);" onmouseover="this.style.background='var(--blue)';this.style.color='#fff'" onmouseout="this.style.background='var(--white)';this.style.color='var(--gray-5)'">→ Next</button>
+        <button onclick="sendDebTask('${t.id}','backlog')" style="flex:1;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;border:none;border-right:1px solid var(--gray-2);padding:8px 4px;cursor:pointer;background:var(--white);color:var(--gray-5);" onmouseover="this.style.background='var(--blue)';this.style.color='#fff'" onmouseout="this.style.background='var(--white)';this.style.color='var(--gray-5)'">→ Backlog</button>
+        <button onclick="sendDebTask('${t.id}','waiting')" style="flex:1;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;border:none;padding:8px 4px;cursor:pointer;background:var(--white);color:#a07800;" onmouseover="this.style.background='#c89600';this.style.color='#fff'" onmouseout="this.style.background='var(--white)';this.style.color='#a07800'">→ Waiting</button>
+      </div>`;
+    el.appendChild(div);
+  });
+}
+
+function renderDebNotes() {
+  const el=document.getElementById('deb-saved-notes'); if(!el) return;
+  if(!debNotes.length){ el.innerHTML=''; return; }
+  el.innerHTML = '';
+  [...debNotes].reverse().forEach((n,i)=>{
+    const div=document.createElement('div');
+    div.className='deb-saved-note';
+    const realIdx = debNotes.length-1-i;
+    div.innerHTML=`<div class="deb-note-meta">${n.date}</div>${esc(n.text)}<span class="deb-note-del" onclick="deleteDebNote(${realIdx})">✕</span>`;
+    el.appendChild(div);
+  });
+}
+
+function updateCounts() {
+  const open=tasks.filter(t=>!t.done), done=tasks.filter(t=>t.done);
+  document.getElementById('cnt-open').textContent=open.length;
+  document.getElementById('cnt-done').textContent=done.length;
+  document.getElementById('s-open').textContent=open.length;
+  document.getElementById('s-today').textContent=open.filter(t=>t.timeline==='today').length;
+  document.getElementById('s-high').textContent=open.filter(t=>t.priority==='high').length;
+  document.getElementById('s-deb').textContent=open.filter(t=>t.assignee==='deb'||t.assignee==='both').length;
+  TIMELINES.forEach(tl=>{ const el=document.getElementById(`tc-${tl}`); if(el) el.textContent=open.filter(t=>t.timeline===tl).length; });
+  const pEl=document.getElementById('tc-personal'); if(pEl) pEl.textContent=tasks.filter(t=>t.timeline==='personal'&&!t.done).length;
+  const dEl=document.getElementById('tc-done-tab'); if(dEl) dEl.textContent=done.length;
+  const debEl=document.getElementById('tc-deb'); if(debEl) debEl.textContent=tasks.filter(t=>t.fromDeb&&!t.debSent&&!t.done).length;
+}
+
+// ── ACTIONS ──
+function toggleDone(id) {
+  const t=tasks.find(t=>t.id===id); if(!t) return;
+  t.done=!t.done;
+  // Quick tasks: remove when done (don't archive, just disappear)
+  if(t.done && !t.pinned && t.timeline==='today') {
+    // keep in done list still
+  }
+  saveTasks(); renderAll();
+  if(!t.done) switchTab(t.timeline==='today'?'today':t.timeline);
+}
+
+function togglePin(id) {
+  const t=tasks.find(t=>t.id===id); if(!t) return;
+  t.pinned=!t.pinned; saveTasks(); renderAll();
+}
+function makeMain(id) {
+  const t=tasks.find(t=>t.id===id); if(!t) return;
+  t.timeline='today'; t.pinned=true; saveTasks(); renderAll();
+}
+
+function moveTask(id,newTl) {
+  const t=tasks.find(t=>t.id===id); if(!t) return;
+  t.timeline=newTl; t.pinned=false; saveTasks(); renderAll();
+  // stay on current tab - do NOT switchTab
+}
+
+function deleteTask(id) { tasks=tasks.filter(t=>t.id!==id); saveTasks(); renderAll(); }
+function setPriority(id,pri) { const t=tasks.find(t=>t.id===id); if(!t) return; t.priority=pri; saveTasks(); renderAll(); }
+function updateTitle(id,el) { const t=tasks.find(t=>t.id===id); if(!t) return; t.title=el.textContent.trim()||t.title; saveTasks(); }
+function updateNote(id,el) { const t=tasks.find(t=>t.id===id); if(!t) return; t.note=el.value.trim(); saveTasks(); renderAll(); }
+function toggleNote(id) { const wrap=document.getElementById(`nwrap-${id}`); if(!wrap) return; wrap.classList.toggle('open'); if(wrap.classList.contains('open')) wrap.querySelector('textarea').focus(); }
+
+function addQuickTask() {
+  const input=document.getElementById('add-quick');
+  const title=input.value.trim(); if(!title) return;
+  const cat=document.getElementById('cat-quick')?.value||'personal';
+  const pri=document.getElementById('pri-quick')?.value||'med';
+  const asgn=document.getElementById('asgn-quick')?.value||'david';
+  tasks.unshift({id:uid(),title,timeline:'today',pinned:false,cat,priority:pri,assignee:asgn,done:false,note:'',created:Date.now()});
+  input.value=''; saveTasks(); renderAll();
+}
+
+function addMainTask() {
+  const input=document.getElementById('add-main');
+  const title=input.value.trim(); if(!title) return;
+  const cat=document.getElementById('cat-main')?.value||'internal';
+  const pri=document.getElementById('pri-main')?.value||'med';
+  const asgn=document.getElementById('asgn-main')?.value||'david';
+  tasks.unshift({id:uid(),title,timeline:'today',pinned:true,cat,priority:pri,assignee:asgn,done:false,note:'',created:Date.now()});
+  input.value=''; saveTasks(); renderAll();
+}
+
+function addTask(tl) {
+  const input=document.getElementById(`add-${tl}`);
+  const cat=document.getElementById(`cat-${tl}`)?.value||'internal';
+  const pri=document.getElementById(`pri-${tl}`)?.value||'med';
+  const asgn=document.getElementById(`asgn-${tl}`)?.value||'david';
+  const title=input.value.trim(); if(!title) return;
+  tasks.unshift({id:uid(),title,timeline:tl,pinned:false,cat,priority:pri,assignee:asgn,done:false,note:'',created:Date.now()});
+  input.value=''; saveTasks(); renderAll();
+}
+
+function handleAddKey(e,tl,pinned) {
+  if(e.key!=='Enter') return;
+  e.preventDefault();
+  if(tl==='today') { pinned ? addMainTask() : addQuickTask(); }
+  else if(tl==='personal-tab') addPersonalTask();
+  else addTask(tl);
+}
+
+function focusAdd(tl) { const el=document.getElementById(`add-${tl}`); if(el){ switchTab(tl==='personal-tab'?'personal':tl); el.focus(); } }
+
+function addPersonalTask() {
+  const input=document.getElementById('add-personal-tab');
+  const pri=document.getElementById('pri-personal-tab')?.value||'low';
+  const title=input.value.trim(); if(!title) return;
+  tasks.unshift({id:uid(),title,timeline:'personal',pinned:false,cat:'personal',priority:pri,assignee:'david',done:false,note:'',created:Date.now()});
+  input.value=''; saveTasks(); renderAll();
+}
+
+// ── DEB NOTES ──
+function saveDebNote() {
+  const ta=document.getElementById('deb-note-input');
+  const text=ta.value.trim(); if(!text) return;
+  debNotes.push({ text, date: new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'}).toUpperCase() });
+  saveDebNotes(); ta.value=''; renderDebNotes();
+}
+function deleteDebNote(idx) { debNotes.splice(idx,1); saveDebNotes(); renderDebNotes(); }
+
+// ── DEB TASKS ──
+function stageDebTask() {
+  const input=document.getElementById('deb-task-input');
+  const pri=document.getElementById('deb-task-pri')?.value||'med';
+  const title=input.value.trim(); if(!title) return;
+  tasks.unshift({id:uid(),title,timeline:'deb',pinned:false,cat:'internal',priority:pri,assignee:'david',done:false,note:'',fromDeb:true,debSent:false,created:Date.now()});
+  input.value=''; saveTasks(); renderAll();
+}
+function sendDebTask(id, tl) {
+  const t=tasks.find(t=>t.id===id); if(!t) return;
+  t.timeline=tl; t.debSent=true; t.pinned=(tl==='today');
+  saveTasks(); renderAll();
+}
+document.getElementById('deb-task-input').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); stageDebTask(); } });
+
+// ── TABS ──
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===name));
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.toggle('active',p.id===`panel-${name}`));
+}
+document.querySelectorAll('.tab').forEach(tab=>tab.addEventListener('click',()=>switchTab(tab.dataset.tab)));
+
+// ── COLLAPSE ──
+document.querySelectorAll('.section-label').forEach(label=>{
+  label.addEventListener('click',()=>{
+    label.classList.toggle('collapsed');
+    // hide add bar for quick/main
+    if(label.id==='quick-label') { const b=document.getElementById('quick-add-bar'); if(b) b.style.display=label.classList.contains('collapsed')?'none':'flex'; }
+    if(label.id==='main-label') { const b=document.getElementById('main-add-bar'); if(b) b.style.display=label.classList.contains('collapsed')?'none':'flex'; }
+    const list=label.nextElementSibling;
+    if(list&&list.classList.contains('task-list')) list.classList.toggle('collapsed-list');
+    // for add bars followed by task list
+    let sibling=label.nextElementSibling;
+    while(sibling){ if(sibling.classList.contains('task-list')){ sibling.classList.toggle('collapsed-list'); break; } sibling=sibling.nextElementSibling; }
+  });
+});
+
+// ── DATE ──
+document.getElementById('hdate').textContent = new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'}).toUpperCase();
+
+renderAll();
+</script>
+</body>
+</html>
