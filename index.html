@@ -372,7 +372,8 @@ body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background: 
 /* also size up the badge itself */
 .task-priority { font-size: 9px !important; padding: 3px 7px !important; cursor: default; }
 
-/* ── EMPTY ── */
+.tab[data-tab="davidnotes"] { color: var(--gray-5); font-style: italic; }
+.tab[data-tab="davidnotes"].active { border-bottom-color: var(--ink); background: rgba(0,0,0,0.02); }
 .empty-state { padding: 40px 0; text-align: center; color: var(--gray-3); font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; }
 
 /* ── MOBILE ── */
@@ -423,6 +424,7 @@ body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background: 
     <div class="tab" data-tab="waiting">Waiting <span class="tab-count" id="tc-waiting">0</span></div>
     <div class="tab" data-tab="personal">Personal <span class="tab-count" id="tc-personal">0</span></div>
     <div class="tab" data-tab="deb">Deb's Notes <span class="tab-count" id="tc-deb">0</span></div>
+    <div class="tab" data-tab="davidnotes" id="tab-davidnotes">David's Notes</div>
     <div class="tab" data-tab="done">Done <span class="tab-count" id="tc-done-tab">0</span></div>
   </nav>
 
@@ -593,6 +595,31 @@ body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background: 
       </div>
     </div>
 
+    <!-- DAVID'S NOTES -->
+    <div class="tab-panel" id="panel-davidnotes">
+      <!-- Secondary lock overlay -->
+      <div id="david-lock" style="padding: 60px 0; max-width: 320px;">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--ink);margin-bottom:16px;">Private - Password Required</div>
+        <input id="david-pw" type="password" placeholder="Password"
+          style="width:100%;border:none;border-bottom:1px solid var(--black);background:transparent;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:15px;font-weight:300;color:var(--ink);padding:10px 0;outline:none;border-radius:0;"
+          onkeydown="if(event.key==='Enter') tryDavidUnlock()">
+        <button onclick="tryDavidUnlock()"
+          style="margin-top:14px;width:100%;background:var(--black);color:var(--white);border:none;padding:14px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;cursor:pointer;">Enter</button>
+        <div id="david-pw-error" style="font-size:11px;color:#c0392b;margin-top:10px;opacity:0;transition:opacity 0.3s;">Incorrect password.</div>
+      </div>
+      <div id="david-notes-content" style="display:none;">
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--gray-4);padding:18px 0 12px;border-bottom:1px solid var(--gray-2);">New Note</div>
+        <div style="display:flex;align-items:flex-start;border-bottom:1px solid var(--black);gap:0;">
+          <textarea id="david-note-input"
+            style="flex:1;border:none;background:transparent;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:13px;font-weight:300;color:var(--ink);padding:16px 0;outline:none;resize:none;min-height:80px;line-height:1.7;"
+            placeholder="Write a note or reminder..."></textarea>
+          <button onclick="saveDavidNote()"
+            style="flex-shrink:0;align-self:flex-end;margin-bottom:16px;margin-left:16px;background:var(--black);color:var(--white);border:none;padding:8px 16px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;cursor:pointer;">Save</button>
+        </div>
+        <div id="david-saved-notes" style="margin-top:0;"></div>
+      </div>
+    </div>
+
     <!-- DONE -->
     <div class="tab-panel" id="panel-done">
       <div class="section-label" id="done-list-label">Completed <span class="sl-toggle">▾</span></div>
@@ -621,7 +648,7 @@ function tryUnlock() {
 document.getElementById('lock-pw').focus();
 
 // ── DATA ──
-const STORAGE_KEY = 'radish-tasks-v5';
+const STORAGE_KEY = 'radish-tasks-v6';
 const DEB_NOTES_KEY = 'radish-deb-notes-v1';
 const TIMELINES = ['today','week','next','backlog','waiting','personal'];
 const CAT_LABELS = { internal:'Internal', portals:'Portals', creative:'Creative', seo:'SEO & Brand', production:'Production', personal:'Personal' };
@@ -644,6 +671,12 @@ const DEFAULT_TASKS = [
   // ── WAITING ──
   { id:uid(), title:"Form D - double check", timeline:'waiting', pinned:false, cat:'internal', priority:'med', assignee:'david', done:false, note:'', link:'https://chatgpt.com/c/69c3167b-4cc0-8333-a166-3e1896b26794', created:Date.now() },
   { id:uid(), title:"NH & by-state filing - Form D", timeline:'waiting', pinned:false, cat:'internal', priority:'med', assignee:'david', done:false, note:'', created:Date.now() },
+  { id:uid(), title:"Taxes Radish - want to see expenses", timeline:'waiting', pinned:false, cat:'internal', priority:'high', assignee:'david', done:false, note:'', created:Date.now() },
+  { id:uid(), title:"Deb personal tax - don't forget", timeline:'waiting', pinned:false, cat:'internal', priority:'med', assignee:'david', done:false, note:'', created:Date.now() },
+  { id:uid(), title:"Close the loop on tax credit - offer to someone else?", timeline:'waiting', pinned:false, cat:'internal', priority:'med', assignee:'david', done:false, note:'', created:Date.now() },
+  { id:uid(), title:"Deb to read James script and Ben situation", timeline:'waiting', pinned:false, cat:'internal', priority:'med', assignee:'david', done:false, note:'', created:Date.now() },
+  { id:uid(), title:"C&J dinner", timeline:'waiting', pinned:false, cat:'internal', priority:'low', assignee:'david', done:false, note:'', created:Date.now() },
+  { id:uid(), title:"Lily H.", timeline:'waiting', pinned:false, cat:'internal', priority:'low', assignee:'david', done:false, note:'', created:Date.now() },
   // ── MAIN (today pinned) ──
   { id:uid(), title:"100K–250K more", timeline:'today', pinned:true, cat:'internal', priority:'high', assignee:'david', done:false, note:'', created:Date.now() },
   // ── BACKLOG ──
@@ -937,6 +970,68 @@ document.querySelectorAll('.section-label').forEach(label=>{
 
 // ── DATE ──
 document.getElementById('hdate').textContent = new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'}).toUpperCase();
+
+// ── DAVID NOTES ──
+const DAVID_NOTES_KEY = 'radish-david-notes-v1';
+const DAVID_PASSWORD = 'Soccer23!!';
+let davidUnlocked = false;
+let davidNotes = (()=>{ try{ const r=localStorage.getItem(DAVID_NOTES_KEY); if(r) return JSON.parse(r); }catch(e){}
+  return [{ text:'Lemme budget-82-noah/montana-7500/Nancy budget 2500\n~$2000 missing ^^\n\n$5392 overall', date:'TUE, MAR 31, 2026, 04:49 PM', id:'seed001' }];
+})();
+
+function tryDavidUnlock() {
+  const val = document.getElementById('david-pw').value;
+  const err = document.getElementById('david-pw-error');
+  if (val === DAVID_PASSWORD) {
+    davidUnlocked = true;
+    document.getElementById('david-lock').style.display = 'none';
+    document.getElementById('david-notes-content').style.display = 'block';
+    err.style.opacity = '0';
+    renderDavidNotes();
+  } else {
+    err.style.opacity = '1';
+    document.getElementById('david-pw').value = '';
+    document.getElementById('david-pw').focus();
+  }
+}
+
+function saveDavidNote() {
+  const ta = document.getElementById('david-note-input');
+  const text = ta.value.trim(); if (!text) return;
+  davidNotes.unshift({ text, date: new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'}).toUpperCase(), id: uid() });
+  localStorage.setItem(DAVID_NOTES_KEY, JSON.stringify(davidNotes));
+  ta.value = ''; renderDavidNotes();
+}
+
+function deleteDavidNote(id) {
+  davidNotes = davidNotes.filter(n=>n.id!==id);
+  localStorage.setItem(DAVID_NOTES_KEY, JSON.stringify(davidNotes));
+  renderDavidNotes();
+}
+
+function renderDavidNotes() {
+  const el = document.getElementById('david-saved-notes'); if (!el) return;
+  if (!davidNotes.length) { el.innerHTML = '<div style="padding:32px 0;text-align:center;color:var(--gray-3);font-size:10px;text-transform:uppercase;letter-spacing:0.1em;">No notes yet</div>'; return; }
+  el.innerHTML = '';
+  davidNotes.forEach(n => {
+    const div = document.createElement('div');
+    div.style.cssText = 'border-bottom:1px solid var(--gray-2);padding:16px 0;position:relative;';
+    div.innerHTML = `
+      <div style="font-size:9px;color:var(--gray-4);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px;">${n.date}</div>
+      <div style="font-size:13px;font-weight:300;color:var(--ink);line-height:1.7;white-space:pre-wrap;padding-right:28px;">${esc(n.text)}</div>
+      <span onclick="deleteDavidNote('${n.id}')" style="position:absolute;top:16px;right:0;font-size:11px;color:var(--gray-3);cursor:pointer;" onmouseover="this.style.color='#c0392b'" onmouseout="this.style.color='var(--gray-3)'">x</span>`;
+    el.appendChild(div);
+  });
+}
+
+// focus password when switching to David Notes tab while locked
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    if (tab.dataset.tab === 'davidnotes' && !davidUnlocked) {
+      setTimeout(()=>{ const pw=document.getElementById('david-pw'); if(pw) pw.focus(); }, 100);
+    }
+  });
+});
 
 renderAll();
 </script>
